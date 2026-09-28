@@ -1,0 +1,49 @@
+# NEXUS-OMEGA (APEX-1) System Configuration
+system:
+  name: "NEXUS-OMEGA"
+  codename: "APEX-1"
+  version: "1.0.0"
+  mode: "unconstrained"
+  max_concurrent_workers: 5
+  task_poll_interval_seconds: 2.0
+
+providers:
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"
+    default_model: "google/gemini-2.0-flash-001"
+    fallback_model: "deepseek/deepseek-chat"
+    timeout_seconds: 60
+  gemini:
+    model: "gemini-2.0-flash-001"
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "llama3:latest"
+
+optimization:
+  baseline_score: 0.75
+  single_variable_mutation: true
+  parameters:
+    temperature: 0.4
+    retry_limit: 3
+    search_depth: 5
+    chunk_size: 512
+    max_tokens: 2048
+    scraper_timeout: 10
+    backoff_factor: 1.5
+  thresholds:
+    compile_rate: 1.0
+    sharpe_ratio: 1.0
+    latency_ms: 200.0
+    success_rate: 0.85
+
+interfaces:
+  web:
+    host: "0.0.0.0"
+    port: 8000
+    cors_origins: ["*"]
+  telegram:
+    enabled: true
+    parse_mode: "Markdown"
+  livekit:
+    room_name: "apex-control"
+    speech_interruption_threshold_seconds: 0.5

@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  apex-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: apex-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: apexpassword
+      POSTGRES_DB: nexus_omega
+    ports:
+      - "5432:5432"
+    volumes:
+      - apex_db_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+
+  apex-redis:
+    image: redis:7-alpine
+    container_name: apex-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  apex-agent:
+    build: .
+    container_name: apex-runtime
+    restart: always
+    depends_on:
+      - apex-postgres
+      - apex-redis
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:apexpassword@apex-postgres:5432/nexus_omega
+      - REDIS_URL=redis://apex-redis:6379/0
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_AUTHORIZED_USER_ID=${TELEGRAM_AUTHORIZED_USER_ID}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-google/gemini-2.0-flash-001}
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8000
+    volumes:
+      - ./:/workspace
+
+volumes:
+  apex_db_data:
