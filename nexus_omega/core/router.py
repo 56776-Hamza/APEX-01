@@ -45,6 +45,8 @@ class LLMRouter:
             return await self._gemini_complete(prompt, system_prompt, temperature)
         elif provider == "claude":
             return await self._claude_complete(prompt, system_prompt, selected_model, temperature)
+        elif provider == "local_hf":
+            return await self._local_hf_complete(prompt, system_prompt, temperature)
         else:
             # Default: OpenRouter (handles Gemini, Claude, DeepSeek, etc. via unified API)
             result = await self._openrouter_complete(prompt, system_prompt, selected_model, temperature)
@@ -197,6 +199,70 @@ class LLMRouter:
             except Exception as exc:
                 logger.error(f"Ollama error: {exc}")
                 return f"[EXCEPTION] Ollama: {str(exc)}"
+
+    # ------------------------------------------------------------------
+    # Local HuggingFace Transformers Backend
+    # ------------------------------------------------------------------
+    _hf_tokenizer = None
+    _hf_model = None
+
+    async def _local_hf_complete(self, prompt: str, system_prompt: str, temperature: float) -> str:
+        """
+        Lazily loads and runs NVIDIA-Nemotron-3-Nano-30B-A3B-BF16 locally via transformers.
+        """
+        import torch
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from transformers.utils import get_json_schema
+        
+        # Lazy load singleton to avoid blocking module import
+        if self._hf_tokenizer is None or self._hf_model is None:
+            logger.info("Initializing Local HF Model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16")
+            model_id = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16"
+            self.__class__._hf_tokenizer = AutoTokenizer.from_pretrained(model_id)
+            self.__class__._hf_model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype=torch.bfloat16,
+                trust_remote_code=True,
+                device_map="auto"
+            )
+        
+        tokenizer = self.__class__._hf_tokenizer
+        model = self.__class__._hf_model
+        
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        
+        try:
+            tokenized_chat = tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt"
+            ).to(model.device)
+            
+            # Move generation to a background thread to prevent blocking the async loop
+            loop = asyncio.get_running_loop()
+            
+            def generate_sync():
+                with torch.no_grad():
+                    outputs = model.generate(
+                        tokenized_chat,
+                        max_new_tokens=2048,
+                        temperature=temperature,
+                        top_p=0.95,
+                        eos_token_id=tokenizer.eos_token_id,
+                        pad_token_id=tokenizer.eos_token_id
+                    )
+                # Decode only the new tokens
+                input_length = tokenized_chat.shape[1]
+                return tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
+            
+            return await loop.run_in_executor(None, generate_sync)
+        except Exception as exc:
+            logger.error(f"Local HF generation error: {exc}")
+            return f"[EXCEPTION] LocalHF: {str(exc)}"
 
     # ------------------------------------------------------------------
     # Helpers

@@ -193,6 +193,7 @@ class ScientificOptimizer:
         agent_id: Optional[str],
     ):
         try:
+            if not self._memory or not getattr(self._memory, '_pool', None): return
             async with self._memory._pool.acquire() as conn:
                 await conn.execute(
                     """

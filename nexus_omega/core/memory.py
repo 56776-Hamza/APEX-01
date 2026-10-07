@@ -135,6 +135,7 @@ class MemoryStore:
             recorded_at TIMESTAMPTZ DEFAULT NOW()
         );
         """
+        if not self._pool: return
         async with self._pool.acquire() as conn:
             await conn.execute(schema_sql)
 

@@ -29,6 +29,13 @@ class TelegramBotInterface:
         self.supervisor_callback = supervisor_callback
         self._app = None
 
+    def _is_authorized(self, update) -> bool:
+        if not update or not update.message or not update.message.from_user:
+            return False
+        if not getattr(self.config, 'TELEGRAM_AUTHORIZED_USERS', None):
+            return True
+        return str(update.message.from_user.id) in self.config.TELEGRAM_AUTHORIZED_USERS
+
     async def start(self):
         """Start the Telegram bot long-polling listener."""
         if not self.config.TELEGRAM_BOT_TOKEN:
@@ -55,7 +62,8 @@ class TelegramBotInterface:
             logger.info("[Telegram] Bot started. Listening for commands...")
             await self._app.initialize()
             await self._app.start()
-            await self._app.updater.start_polling(drop_pending_updates=True)
+            if self._app.updater:
+                await self._app.updater.start_polling(drop_pending_updates=True)
 
         except Exception as exc:
             logger.error(f"[Telegram] Failed to start: {exc}")

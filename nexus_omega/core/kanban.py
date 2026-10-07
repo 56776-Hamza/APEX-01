@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Any, Callable
+import inspect
 
 logger = logging.getLogger("APEX1.Kanban")
 
@@ -78,7 +79,7 @@ class KanbanEngine:
     # ------------------------------------------------------------------
     # Goal Management
     # ------------------------------------------------------------------
-    def create_goal(self, title: str, description: str, success_criteria: Dict = None) -> Goal:
+    def create_goal(self, title: str, description: str, success_criteria: Optional[Dict] = None) -> Goal:
         goal = Goal(
             id=str(uuid.uuid4()),
             title=title,
@@ -220,7 +221,7 @@ class KanbanEngine:
         # Call registered local callbacks (e.g., WebSocket broadcast)
         for cb in self._state_change_callbacks:
             try:
-                if asyncio.iscoroutinefunction(cb):
+                if inspect.iscoroutinefunction(cb):
                     await cb(event_type, payload)
                 else:
                     cb(event_type, payload)
